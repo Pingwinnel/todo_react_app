@@ -211,13 +211,7 @@ export default function App() {
                     >
                       <Trash />
                     </ActionIcon>
-                    <Button onClick={()=>{setEditIndex(index);
-                        taskTitle.current.value = task.title;
-                        taskSummary.current.value = task.summary;
-                        taskState.current = task.state;
-                        taskDeadline.current = task.deadline || "2024-12-25";
-                        setOpened(true);
-                      }}
+                   
                   </Group>
                   <Text color={"dimmed"} size={"md"} mt={"sm"}>
                     {task.summary || "No summary provided"}
