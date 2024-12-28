@@ -9,6 +9,7 @@ import {
   Card,
   ActionIcon,
 } from "@mantine/core";
+
 import { useState, useRef, useEffect } from "react";
 import { MoonStars, Sun, Trash } from "tabler-icons-react";
 
@@ -18,6 +19,10 @@ import { useHotkeys, useLocalStorage } from "@mantine/hooks";
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [opened, setOpened] = useState(false);
+  const taskState = useRef("Not Done");
+  const taskTitle = useRef("");
+  const taskSummary = useRef("");
+  const taskDeadline = useRef(new Date("2024-12-25"));
 
   const [colorScheme, setColorScheme] = useLocalStorage({
     key: "mantine-color-scheme",
@@ -29,39 +34,68 @@ export default function App() {
 
   useHotkeys([["mod+J", () => toggleColorScheme()]]);
 
-  const taskTitle = useRef("");
-  const taskSummary = useRef("");
-
-  function createTask() {
-    tasks.push({
-      title: taskTitle.current.value,
-      summary: taskSummary.current.value,
-    });
-    setTasks(tasks);
-    saveTasks(tasks);
-  }
-
-  function deleteTask(index) {
-    var clonedTasks = tasks;
-
-    clonedTasks.splice(index, 1);
-
-    setTasks(clonedTasks);
-    saveTasks(clonedTasks);
-  }
-
+ 
   function loadTasks() {
-    let loadedTasks = localStorage.getItem("tasks");
-
-    let tasks = JSON.parse(loadedTasks);
-
-    if (tasks) {
-      setTasks(tasks);
+    try {
+      const loadedTasks = JSON.parse(localStorage.getItem("tasks")) || [];
+      setTasks(loadedTasks);
+    } catch (error) {
+      console.error("Failed to load tasks:", error);
+      setTasks([]); 
     }
   }
 
-  function saveTasks(tasks) {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
+  function saveTasks(tasksToSave) {
+    localStorage.setItem("tasks", JSON.stringify(tasksToSave));
+  }
+
+  function createTask() {
+    const newTask = {
+      title: taskTitle.current.value,
+      summary: taskSummary.current.value,
+      state: taskState.current,
+      deadline: taskDeadline.current
+    };
+
+    const updatedTasks = [...tasks, newTask];
+    setTasks(updatedTasks); 
+    saveTasks(updatedTasks); 
+    taskState.current="Not Done"
+
+  }
+
+  function deleteTask(index) {
+    const updatedTasks = tasks.filter((_, i) => i !== index); 
+    setTasks(updatedTasks);
+    saveTasks(updatedTasks); 
+  }
+
+  function sortTasks(criteria) {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      if (criteria === "deadline") {
+        return new Date(a.deadline) - new Date(b.deadline);
+      }
+      return a.state === criteria ? -1 : 1;
+    });
+    setTasks(sortedTasks);
+  }
+
+  function filterTasks(criteria) {
+    if (!criteria) {
+      loadTasks(); 
+    } else {
+      const filteredTasks = tasks.filter((task) => task.state === criteria);
+      setTasks(filteredTasks);
+    }
+  }
+
+  function sortTasksByDeadline() {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      if (!a.deadline) return 1; // Move tasks without deadlines to the end
+      if (!b.deadline) return -1;
+      return new Date(a.deadline) - new Date(b.deadline);
+    });
+    setTasks(sortedTasks);
   }
 
   useEffect(() => {
@@ -84,9 +118,7 @@ export default function App() {
             size={"md"}
             title={"New Task"}
             withCloseButton={false}
-            onClose={() => {
-              setOpened(false);
-            }}
+            onClose={() => setOpened(false)}
             centered
           >
             <TextInput
@@ -102,22 +134,26 @@ export default function App() {
               placeholder={"Task Summary"}
               label={"Summary"}
             />
+            <select
+              onChange={(e) => (taskState.current = e.target.value)}
+              defaultValue="Not Done"
+            >
+              <option value="Done">Done</option>
+              <option value="Not Done">Not Done</option>
+              <option value="Doing right now">Doing right now</option>
+            </select>
+            <input
+              type="date"
+              label="Deadline"
+              placeholder="Pick a deadline"
+              defaultValue="2024-12-25" 
+              onChange={(e) => (taskDeadline.current = e.target.value)}
+            />
             <Group mt={"md"} position={"apart"}>
-              <Button
-                onClick={() => {
-                  setOpened(false);
-                }}
-                variant={"subtle"}
-              >
+              <Button onClick={() => setOpened(false)} variant={"subtle"}>
                 Cancel
               </Button>
-              <Button
-                onClick={() => {
-                  createTask();
-                }}
-              >
-                Create Task
-              </Button>
+              <Button onClick={createTask}>Create Task</Button>
             </Group>
           </Modal>
           <Container size={550} my={40}>
@@ -142,44 +178,64 @@ export default function App() {
                 )}
               </ActionIcon>
             </Group>
+            <Group mt="md">
+              <Button onClick={() => sortTasks("Done")}>Show 'Done' First</Button>
+              <Button onClick={() => sortTasks("Doing right now")}>
+                Show 'Doing' First
+              </Button>
+              <Button onClick={() => sortTasks("Not Done")}>
+                Show 'Not Done' First
+              </Button>
+              
+            </Group>
+            <Group mt="md">
+              <Button onClick={() => filterTasks("Done")}>Filter 'Done'</Button>
+              <Button onClick={() => filterTasks("Doing right now")}>
+                Filter 'Doing'
+              </Button>
+              <Button onClick={() =>{ filterTasks("Not Done")}}>
+                Filter 'Not Done'
+              </Button>
+              <Button onClick={() => filterTasks(null)}>Clear Filters</Button>
+              <Button onClick={sortTasksByDeadline}>Sort by Deadline</Button>;
+            </Group>
             {tasks.length > 0 ? (
-              tasks.map((task, index) => {
-                if (task.title) {
-                  return (
-                    <Card withBorder key={index} mt={"sm"}>
-                      <Group position={"apart"}>
-                        <Text weight={"bold"}>{task.title}</Text>
-                        <ActionIcon
-                          onClick={() => {
-                            deleteTask(index);
-                          }}
-                          color={"red"}
-                          variant={"transparent"}
-                        >
-                          <Trash />
-                        </ActionIcon>
-                      </Group>
-                      <Text color={"dimmed"} size={"md"} mt={"sm"}>
-                        {task.summary
-                          ? task.summary
-                          : "No summary was provided for this task"}
-                      </Text>
-                    </Card>
-                  );
-                }
-              })
+              tasks.map((task, index) => (
+                <Card withBorder key={index} mt={"sm"}>
+                  <Group position={"apart"}>
+                    <Text weight={"bold"}>{task.title}</Text>
+                    <ActionIcon
+                      onClick={() => deleteTask(index)}
+                      color={"red"}
+                      variant={"transparent"}
+                    >
+                      <Trash />
+                    </ActionIcon>
+                    <Button onClick={()=>{setEditIndex(index);
+                        taskTitle.current.value = task.title;
+                        taskSummary.current.value = task.summary;
+                        taskState.current = task.state;
+                        taskDeadline.current = task.deadline || "2024-12-25";
+                        setOpened(true);
+                      }}
+                  </Group>
+                  <Text color={"dimmed"} size={"md"} mt={"sm"}>
+                    {task.summary || "No summary provided"}
+                  </Text>
+                  <Text color={"dimmed"} size={"sm"}>
+                    State: {task.state}
+                  </Text>
+                  <Text color={"dimmed"} size={"md"} mt={"sm"}>
+                   Deadline: {task.deadline}
+                  </Text>
+                </Card>
+              ))
             ) : (
               <Text size={"lg"} mt={"md"} color={"dimmed"}>
                 You have no tasks
               </Text>
             )}
-            <Button
-              onClick={() => {
-                setOpened(true);
-              }}
-              fullWidth
-              mt={"md"}
-            >
+            <Button onClick={() => setOpened(true)} fullWidth mt={"md"}>
               New Task
             </Button>
           </Container>
